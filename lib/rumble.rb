@@ -19,29 +19,15 @@ wbr xmp ].each do |tag|
   end
 
   class Context < Array
-    attr_accessor :instance
-
-    def initialize(instance)
-      @instance = instance
-    end
-
-    def valid?
-      @instance.instance_variable_get(:@rumble_context).eql?(self)
-    end
-
-    def done(restore = nil)
-      @instance.instance_variable_set(:@rumble_context, restore)
-      self
-    end
-
     def to_s
       join
     end
   end
 
   class Tag
-    def initialize(context, name, sc)
+    def initialize(context, instance, name, sc)
       @context = context
+      @instance = instance
       @name = name
       @sc = sc
     end
@@ -101,7 +87,7 @@ wbr xmp ].each do |tag|
 
       self
     rescue
-      @context.done
+      @instance.rumble_cleanup
       raise $!
     end
 
@@ -109,8 +95,9 @@ wbr xmp ].each do |tag|
     def to_str; to_s end
 
     def to_s
-      if @context.valid?
-        @context.done.to_s
+      if @instance.rumble_context.eql?(@context)
+        @instance.rumble_cleanup
+        @context.join
       else
         @result ||= begin
           res = "<#{@name}#{attrs_to_s}>"
@@ -134,12 +121,28 @@ wbr xmp ].each do |tag|
     end
   end
 
-  def rumble_tag(name, sc, content = nil, attrs = nil, &blk)
-    context = @rumble_context ||= Context.new(self)
+  def rumble
+    ctx = @rumble_context
+    @rumble_context = Context.new
+    yield
+    rumble_cleanup(ctx).to_s
+  end
 
-    tag = Tag.new(context, name, sc)
+  def rumble_tag(name, sc, content = nil, attrs = nil, &blk)
+    context = @rumble_context ||= Context.new
+    tag = Tag.new(context, self, name, sc)
     context << tag
     tag.insert(content, attrs, &blk)
+  end
+
+  def rumble_context
+    @rumble_context
+  end
+
+  def rumble_cleanup(value = nil)
+    @rumble_context
+  ensure
+    @rumble_context = value
   end
 
   def text(str = nil, &blk)
@@ -149,13 +152,6 @@ wbr xmp ].each do |tag|
     else
       str
     end
-  end
-
-  def rumble
-    ctx = @rumble_context
-    @rumble_context = nil
-    yield
-    @rumble_context.done(ctx).to_s
   end
 end
 
