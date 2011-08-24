@@ -10,17 +10,6 @@ Example using [Draper](https://github.com/jcasimir/draper):
       include Rumble
       
       def published_at
-        rumble do
-          span.published_at do
-            span model.published_at.strftime("%A, %B %e").squeeze(" "), :class => 'date'
-            span model.published_at.strftime("%l:%M%p").delete(" "), :class => 'time'
-          end
-        end
-      end
-      
-      # or:
-      
-      def_rumble :published_at do
         span.published_at do
           span model.published_at.strftime("%A, %B %e").squeeze(" "), :class => 'date'
           span model.published_at.strftime("%l:%M%p").delete(" "), :class => 'time'

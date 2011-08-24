@@ -7,8 +7,18 @@ class TestRumble < MiniTest::Unit::TestCase
 
   def assert_rumble(html, &blk)
     exp = html.gsub(/(\s+(<)|>\s+)/) { $2 || '>' }
-    res = rumble { yield }
+    res = yield.to_s
     assert_equal exp, res
+  end
+
+  def setup
+    super
+    assert_nil @rumble_context
+  end
+
+  def teardown
+    super
+    assert_nil @rumble_context
   end
 
   def test_simple
@@ -70,29 +80,15 @@ class TestRumble < MiniTest::Unit::TestCase
     end
   end
 
-  def test_def_rumble
-    klass = Class.new
-    klass.send(:include, Rumble)
-    klass.def_rumble :hello do
-      p "Hello"
-    end
-
-    assert_equal "<p>Hello</p>", klass.new.hello
-  end
-
   def test_error_selfclosing_content
     assert_raises Rumble::Error do
-      rumble do
-        br "content"
-      end
+      br "content"
     end
   end
 
   def test_error_css_proxy_continue
     assert_raises Rumble::Error do
-      rumble do
-        p.one("test").two
-      end
+      p.one("test").two
     end
   end
 end

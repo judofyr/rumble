@@ -65,7 +65,7 @@ class Example
   include Erector::Mixin
 
   class_eval <<-RUBY
-    def_rumble :test_rumble do
+    def test_rumble
       #{CODE}
     end
 

@@ -19,17 +19,28 @@ wbr xmp ].each do |tag|
   end
 
   class Context < Array
-    attr_accessor :start
+    attr_accessor :instance
+
+    def initialize(instance)
+      @instance = instance
+    end
+
+    def done
+      @instance.instance_eval { @rumble_context = nil }
+      self
+    end
+
     def to_s
       join
     end
   end
 
   class Tag
-    def initialize(context, name, sc)
+    def initialize(context, name, sc, main_tag)
       @context = context
       @name = name
       @sc = sc
+      @main_tag = main_tag
     end
 
     def attributes
@@ -61,7 +72,7 @@ wbr xmp ].each do |tag|
     end
 
     def insert(content = nil, attrs = nil, &blk)
-      raise Error, "This tag is already closed" if @done
+      error("This tag is already closed") if @done
 
       if content.is_a?(Hash)
         attrs = content
@@ -71,14 +82,15 @@ wbr xmp ].each do |tag|
       merge_attributes(attrs) if attrs
 
       if block_given?
-        raise Error, "`#{@name}` is not allowed to have content" if @sc
+        error("`#{@name}` is not allowed to have content") if @sc
         @done = :block
         before = @context.size
         res = yield
         @content = res if @context.size == before
         @context << "</#{@name}>"
+        return @context.done.join if @main_tag
       elsif content
-        raise Error, "`#{@name}` is not allowed to have content" if @sc
+        error("`#{@name}` is not allowed to have content") if @sc
         @done = true
         @content = CGI.escape_html(content.to_s)
       elsif attrs
@@ -86,6 +98,11 @@ wbr xmp ].each do |tag|
       end
 
       self
+    end
+
+    def error(str)
+      @context.done
+      raise Error, str
     end
 
     def to_ary; nil end
@@ -96,6 +113,8 @@ wbr xmp ].each do |tag|
       res << @content if @content
       res << "</#{@name}>" if !@sc && @done != :block
       res
+    ensure
+      @context.done if @main_tag
     end
 
     def inspect; to_s.inspect end
@@ -112,33 +131,33 @@ wbr xmp ].each do |tag|
   end
 
   def rumble_tag(name, sc, content = nil, attrs = nil, &blk)
-    raise "Missing Rumble context" unless @rumble_context
     context = @rumble_context
-    tag = Tag.new(context, name, sc)
+
+    if !context
+      new_context = true
+      context = @rumble_context = Context.new(self)
+    end
+
+    tag = Tag.new(context, name, sc, new_context)
     context << tag
     tag.insert(content, attrs, &blk)
   end
 
   def text(str)
-    raise "Missing Rumble context" unless @rumble_context
-    @rumble_context << str.to_s
+    if @rumble_context
+      @rumble_context << str
+    else
+      str
+    end
   end
 
   def rumble
     ctx = @rumble_context
-    @rumble_context = Context.new
+    @rumble_context = nil
     yield
     @rumble_context.to_s
   ensure
     @rumble_context = ctx
-  end
-
-  def self.included(mod)
-    def mod.def_rumble(meth, &blk)
-      define_method(meth) do |*args|
-        rumble { instance_exec(*args, &blk) }
-      end
-    end
   end
 end
 
