@@ -94,9 +94,9 @@ puts e.test_erector
 N = 1000
 
 Benchmark.bmbm do |x|
-  x.report('Rumble')  { N.times { e.test_rumble  } }
-  x.report('Erector') { N.times { e.test_erector } }
-  x.report('Markaby') { N.times { e.test_markaby } }
+  x.report('Rumble')  { N.times { e.test_rumble.to_s  } }
+  x.report('Erector') { N.times { e.test_erector.to_s } }
+  x.report('Markaby') { N.times { e.test_markaby.to_s } }
 end
 
 
