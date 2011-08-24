@@ -25,8 +25,12 @@ wbr xmp ].each do |tag|
       @instance = instance
     end
 
-    def done
-      @instance.instance_eval { @rumble_context = nil }
+    def valid?
+      @instance.instance_variable_get(:@rumble_context).eql?(self)
+    end
+
+    def done(restore = nil)
+      @instance.instance_variable_set(:@rumble_context, restore)
       self
     end
 
@@ -36,11 +40,10 @@ wbr xmp ].each do |tag|
   end
 
   class Tag
-    def initialize(context, name, sc, main_tag)
+    def initialize(context, name, sc)
       @context = context
       @name = name
       @sc = sc
-      @main_tag = main_tag
     end
 
     def attributes
@@ -72,7 +75,7 @@ wbr xmp ].each do |tag|
     end
 
     def insert(content = nil, attrs = nil, &blk)
-      error("This tag is already closed") if @done
+      raise Error, "This tag is already closed" if @done
 
       if content.is_a?(Hash)
         attrs = content
@@ -82,15 +85,14 @@ wbr xmp ].each do |tag|
       merge_attributes(attrs) if attrs
 
       if block_given?
-        error("`#{@name}` is not allowed to have content") if @sc
+        raise Error, "`#{@name}` is not allowed to have content" if @sc
         @done = :block
         before = @context.size
         res = yield
         @content = res if @context.size == before
         @context << "</#{@name}>"
-        return @context.done.join if @main_tag
       elsif content
-        error("`#{@name}` is not allowed to have content") if @sc
+        raise Error, "`#{@name}` is not allowed to have content" if @sc
         @done = true
         @content = CGI.escape_html(content.to_s)
       elsif attrs
@@ -98,23 +100,25 @@ wbr xmp ].each do |tag|
       end
 
       self
-    end
-
-    def error(str)
+    rescue
       @context.done
-      raise Error, str
+      raise $!
     end
 
     def to_ary; nil end
     def to_str; to_s end
 
     def to_s
-      res = "<#{@name}#{attrs_to_s}>"
-      res << @content if @content
-      res << "</#{@name}>" if !@sc && @done != :block
-      res
-    ensure
-      @context.done if @main_tag
+      if @context.valid?
+        @context.done.to_s
+      else
+        @result ||= begin
+          res = "<#{@name}#{attrs_to_s}>"
+          res << @content if @content
+          res << "</#{@name}>" if !@sc && @done != :block
+          res
+        end
+      end
     end
 
     def inspect; to_s.inspect end
@@ -131,19 +135,15 @@ wbr xmp ].each do |tag|
   end
 
   def rumble_tag(name, sc, content = nil, attrs = nil, &blk)
-    context = @rumble_context
+    context = @rumble_context ||= Context.new(self)
 
-    if !context
-      new_context = true
-      context = @rumble_context = Context.new(self)
-    end
-
-    tag = Tag.new(context, name, sc, new_context)
+    tag = Tag.new(context, name, sc)
     context << tag
     tag.insert(content, attrs, &blk)
   end
 
-  def text(str)
+  def text(str = nil, &blk)
+    str = str ? CGI.escape_html(str.to_s) : blk.call.to_s
     if @rumble_context
       @rumble_context << str
     else
@@ -155,9 +155,7 @@ wbr xmp ].each do |tag|
     ctx = @rumble_context
     @rumble_context = nil
     yield
-    @rumble_context.to_s
-  ensure
-    @rumble_context = ctx
+    @rumble_context.done(ctx).to_s
   end
 end
 

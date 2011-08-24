@@ -48,6 +48,56 @@ class TestRumble < MiniTest::Unit::TestCase
     end
   end
 
+  def test_capture
+    html = <<-HTML
+      <p>&lt;br&gt;</p>
+    HTML
+
+    assert_rumble html do
+      p rumble { br }
+    end
+  end
+
+  def test_several
+    html = <<-HTML
+      <p>Hello</p>
+      <p>World</p>
+    HTML
+
+    assert_rumble html do
+      p "Hello"
+      p "World"
+    end
+  end
+
+  def test_several_capture
+    html = <<-HTML
+      <div>
+        <p>Hello</p>
+        <p>Hello</p>
+        |
+        <p>World</p>
+        <p>World</p>
+      </div>
+    HTML
+
+    assert_rumble html do
+      div do
+        %w[Hello World].map { |x| rumble { p x; p x } } * '|'
+      end
+    end
+  end
+
+  def test_capture_raise
+    assert_raises RuntimeError do
+      div do
+        rumble do
+          raise
+        end
+      end
+    end
+  end
+
   def test_escape
     html = <<-HTML
       <p class="&quot;test&quot;">Hello &amp; World</p>
@@ -89,6 +139,15 @@ class TestRumble < MiniTest::Unit::TestCase
   def test_error_css_proxy_continue
     assert_raises Rumble::Error do
       p.one("test").two
+    end
+  end
+
+  # The real test here is if @rumble_context is nil in the teardown.
+  def test_error_general
+    assert_raises RuntimeError do
+      html do
+        raise
+      end
     end
   end
 end
